@@ -183,6 +183,7 @@ let canvasContext = null;
 // Default filter configuration - change these to set default filters
 const DEFAULT_HORZ_FILTER_NAME = 'Upscaling - Lanczos Bicubic etc/lanczos3_10.txt'; // Set to filter name string for default horizontal filter
 const DEFAULT_VERT_FILTER_NAME = 'Scanlines - Adaptive/SLA_Dk_040_Br_070.txt'; // Set to filter name string for default vertical filter
+const DEFAULT_SHADOWMASK_NAME = 'Complex (Multichromatic)/Other/Stripe/MG Stripe (Magenta Green).txt'; // Set to filter name string for default vertical filter
 
 function clampPixelIndex(index, maxIndex) {
     return Math.max(0, Math.min(index, maxIndex));
@@ -895,7 +896,7 @@ function populateFilterDropdowns() {
     if (filterNames.length > 0) {
         let horzFilterToLoad = filterNames[0];
         let vertFilterToLoad = filterNames[0];
-        
+
         // Check if default horizontal filter name exists
         if (DEFAULT_HORZ_FILTER_NAME && filterNames.includes(DEFAULT_HORZ_FILTER_NAME)) {
             horzFilterToLoad = DEFAULT_HORZ_FILTER_NAME;
@@ -914,8 +915,16 @@ function populateFilterDropdowns() {
     
     // Load default shadow mask if available
     if (shadowMaskNames.length > 0) {
-        shadowMaskDropdown.value = shadowMaskNames[0];
-        loadEmbeddedShadowMask(shadowMaskNames[0]);
+        
+        let shadowmaskToLoad = shadowMaskNames[0];
+        
+        // Check if default shadowmask name exists
+        if (DEFAULT_SHADOWMASK_NAME && shadowMaskNames.includes(DEFAULT_SHADOWMASK_NAME)) {
+            shadowmaskToLoad = DEFAULT_SHADOWMASK_NAME;
+        }
+
+        shadowMaskDropdown.value = shadowmaskToLoad;
+        loadEmbeddedShadowMask(shadowmaskToLoad);
     }
 }
 
