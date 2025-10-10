@@ -17,6 +17,11 @@
                 <option value="custom">Custom/File</option>
             </select>
             
+            <div class="search-box">
+                <label for="horzFilterSearch">Search Filters:</label>
+                <input type="text" id="horzFilterSearch" placeholder="Type to filter...">
+            </div>
+            
             <div class="file-loading-section">
                 <label for="horzFilterFile">Or Load Filter File:</label>
                 <input type="file" id="horzFilterFile" accept=".txt">
@@ -33,6 +38,11 @@
                 <option value="custom">Custom/File</option>
             </select>
             
+            <div class="search-box">
+                <label for="vertFilterSearch">Search Filters:</label>
+                <input type="text" id="vertFilterSearch" placeholder="Type to filter...">
+            </div>
+            
             <div class="file-loading-section">
                 <label for="vertFilterFile">Or Load Filter File:</label>
                 <input type="file" id="vertFilterFile" accept=".txt">
@@ -48,6 +58,11 @@
             <select id="shadowMaskDropdown" onchange="loadEmbeddedShadowMask(this.value)">
                 <option value="custom">Custom/File</option>
             </select>
+            
+            <div class="search-box">
+                <label for="shadowMaskSearch">Search Masks:</label>
+                <input type="text" id="shadowMaskSearch" placeholder="Type to filter...">
+            </div>
             
             <div class="file-loading-section">
                 <label for="shadowMaskFile">Or Load Mask File:</label>
@@ -67,6 +82,20 @@
             <h2>Scaling Settings</h2>
             <label for="inputImage">Input Image:</label>
             <input type="file" id="inputImage" accept="image/png">
+            
+            <label for="scalingMode">Scaling Mode:</label>
+            <select id="scalingMode">
+                <option value="fullscreen">Full Screen</option>
+                <option value="aspect">Aspect Ratio</option>
+                <option value="vscale1">vscale_mode = 1</option>
+                <option value="vscale2">vscale_mode = 2</option>
+                <option value="vscale3">vscale_mode = 3</option>
+            </select>
+            
+            <div id="aspectRatioContainer">
+                <label for="aspectRatio">Aspect Ratio (decimal):</label>
+                <input type="number" id="aspectRatio" value="1.3333" step="0.0001" min="0.1" max="10.0">
+            </div>
             
             <label for="outputWidth">Output Width (px):</label>
             <input type="number" id="outputWidth" value="1440" min="1">

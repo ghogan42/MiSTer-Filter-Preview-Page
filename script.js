@@ -185,6 +185,12 @@ const DEFAULT_HORZ_FILTER_NAME = 'Upscaling - Lanczos Bicubic etc/lanczos3_10.tx
 const DEFAULT_VERT_FILTER_NAME = 'Scanlines - Adaptive/SLA_Dk_040_Br_070.txt'; // Set to filter name string for default vertical filter
 const DEFAULT_SHADOWMASK_NAME = 'Complex (Multichromatic)/Other/Stripe/MG Stripe (Magenta Green).txt'; // Set to filter name string for default vertical filter
 
+// Global variables for search functionality
+let originalFilterNames = [];
+let originalShadowMaskNames = [];
+let filteredFilterNames = [];
+let filteredShadowMaskNames = [];
+
 function clampPixelIndex(index, maxIndex) {
     return Math.max(0, Math.min(index, maxIndex));
 }
@@ -688,10 +694,54 @@ function updateShadowMaskFromTextarea() {
     }
 }
 
+// --- Compute scaled size according to MiSTer vscale modes ---
+function computeScaledSize(inputWidth, inputHeight, outputWidth, outputHeight, aspectRatio, vscaleMode) {
+    // Determine step size
+    let step;
+    if (vscaleMode === 1) {
+        step = 1.0;
+    } else if (vscaleMode === 2) {
+        step = 0.5;
+    } else if (vscaleMode === 3) {
+        step = 0.25;
+    } else {
+        throw new Error("vscaleMode must be 1, 2, or 3");
+    }
+
+    // Find vertical scaling
+    let maxFactor = outputHeight / inputHeight;
+    let scaleFactor = Math.floor(maxFactor / step) * step; // round down to nearest valid step
+
+    while (scaleFactor > 0) {
+        let scaledHeight = inputHeight * scaleFactor;
+        let scaledWidth = Math.floor(scaledHeight * aspectRatio);
+
+        // Check if width fits
+        if (scaledWidth <= outputWidth) {
+            break;
+        }
+        scaleFactor -= step; // reduce scaling and try again
+    }
+
+    // Compute offsets
+    let top = Math.floor((outputHeight - (inputHeight * scaleFactor)) / 2);
+    let left = Math.floor((outputWidth - (inputHeight * scaleFactor * aspectRatio)) / 2);
+
+    return {
+        scaleFactor: scaleFactor,
+        scaledWidth: Math.floor(inputHeight * scaleFactor * aspectRatio),
+        scaledHeight: Math.floor(inputHeight * scaleFactor),
+        left: left,
+        top: top
+    };
+}
+
 async function processImage() {
     const inputFile = document.getElementById('inputImage').files[0];
     const outputWidth = parseInt(document.getElementById('outputWidth').value);
     const outputHeight = parseInt(document.getElementById('outputHeight').value);
+    const scalingMode = document.getElementById('scalingMode').value;
+    const aspectRatio = parseFloat(document.getElementById('aspectRatio').value) || 1.3333;
     const canvas = document.getElementById('previewCanvas');
     const saveButton = document.getElementById('saveButton');
     const applyShadowMask = document.getElementById('applyShadowMask').checked;
@@ -732,13 +782,59 @@ async function processImage() {
         originalImage = image;
         
         const imageData = getImageData(image);
-        scaledImageData = scaleImage(imageData, currentHorzFilter, currentVertFilter, outputWidth, outputHeight);
+        let targetWidth = outputWidth;
+        let targetHeight = outputHeight;
+        let scalingInfo = null;
+        
+        // Determine scaling parameters based on mode
+        switch (scalingMode) {
+            case 'fullscreen':
+                // Use full output dimensions (current behavior)
+                targetWidth = outputWidth;
+                targetHeight = outputHeight;
+                break;
+                
+            case 'aspect':
+                // Scale to fit while maintaining aspect ratio
+                const aspectScaleX = outputWidth / image.width;
+                const aspectScaleY = outputHeight / image.height;
+                const aspectScale = Math.min(aspectScaleX, aspectScaleY);
+                targetWidth = Math.floor(image.width * aspectScale);
+                targetHeight = Math.floor(image.height * aspectScale);
+                scalingInfo = {
+                    scaledWidth: targetWidth,
+                    scaledHeight: targetHeight,
+                    left: Math.floor((outputWidth - targetWidth) / 2),
+                    top: Math.floor((outputHeight - targetHeight) / 2)
+                };
+                break;
+                
+            case 'vscale1':
+            case 'vscale2':
+            case 'vscale3':
+                const vscaleMode = parseInt(scalingMode.replace('vscale', ''));
+                scalingInfo = computeScaledSize(image.width, image.height, outputWidth, outputHeight, aspectRatio, vscaleMode);
+                targetWidth = scalingInfo.scaledWidth;
+                targetHeight = scalingInfo.scaledHeight;
+                break;
+                
+            default:
+                throw new Error(`Unknown scaling mode: ${scalingMode}`);
+        }
+        
+        // Scale the image to the target dimensions
+        scaledImageData = scaleImage(imageData, currentHorzFilter, currentVertFilter, targetWidth, targetHeight);
         
         // Apply shadow mask if enabled and loaded
         if (applyShadowMask && currentShadowMask) {
             console.log('Applying shadow mask' + (shadowMask2x ? ' (2x)' : ''));
             scaledImageData = applyMaskToImage(scaledImageData, currentShadowMask, shadowMask2x);
         }
+        
+        // Store scaling info for display
+        scaledImageData.scalingInfo = scalingInfo;
+        scaledImageData.outputWidth = outputWidth;
+        scaledImageData.outputHeight = outputHeight;
         
         // Display scaled image
         displayImage(scaledImageData);
@@ -788,15 +884,42 @@ function displayImage(imageData) {
     const ctx = canvas.getContext('2d');
     canvasContext = ctx;
     
-    canvas.width = imageData.width;
-    canvas.height = imageData.height;
+    // Use output dimensions if scaling info is present, otherwise use image dimensions
+    const outputWidth = imageData.outputWidth || imageData.width;
+    const outputHeight = imageData.outputHeight || imageData.height;
+    const scalingInfo = imageData.scalingInfo;
     
-    ctx.putImageData(imageData, 0, 0);
+    canvas.width = outputWidth;
+    canvas.height = outputHeight;
+    
+    // Clear canvas with black background
+    ctx.fillStyle = 'black';
+    ctx.fillRect(0, 0, outputWidth, outputHeight);
+    
+    if (scalingInfo) {
+        // Draw scaled image centered with black borders
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = imageData.width;
+        tempCanvas.height = imageData.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.putImageData(imageData, 0, 0);
+        
+        ctx.drawImage(
+            tempCanvas,
+            scalingInfo.left,
+            scalingInfo.top,
+            scalingInfo.scaledWidth,
+            scalingInfo.scaledHeight
+        );
+    } else {
+        // Full screen mode - draw image at full size
+        ctx.putImageData(imageData, 0, 0);
+    }
     
     // Add overlay text if enabled
     const showInfo = document.getElementById('showInfo').checked;
     if (showInfo) {
-        addInfoOverlay(ctx, imageData.width, imageData.height);
+        addInfoOverlay(ctx, outputWidth, outputHeight);
     }
 }
 
@@ -814,6 +937,8 @@ function addInfoOverlay(ctx, width, height) {
     const shadowMaskName = document.getElementById('shadowMaskName').textContent;
     const outputWidth = document.getElementById('outputWidth').value;
     const outputHeight = document.getElementById('outputHeight').value;
+    const scalingMode = document.getElementById('scalingMode').value;
+    const aspectRatio = document.getElementById('aspectRatio').value;
     const applyShadowMask = document.getElementById('applyShadowMask').checked;
     const shadowMask2x = document.getElementById('shadowMask2x').checked;
     
@@ -821,12 +946,26 @@ function addInfoOverlay(ctx, width, height) {
         `Horizontal Filter: ${horzFilterName}`,
         `Vertical Filter: ${vertFilterName}`,
         `Shadow Mask: ${shadowMaskName}${applyShadowMask ? (shadowMask2x ? ' (2x)' : '') : ' (Off)'}`,
-        `Output Resolution: ${outputWidth}x${outputHeight}`
+        `Output Resolution: ${outputWidth}x${outputHeight}`,
+        `Scaling Mode: ${scalingMode}`,
+        `Aspect Ratio: ${aspectRatio}`
     ];
     
     infoText.forEach((text, index) => {
         ctx.fillText(text, 10, 10 + index * 20);
     });
+}
+
+// Show/hide aspect ratio input based on scaling mode
+function updateAspectRatioVisibility() {
+    const scalingMode = document.getElementById('scalingMode').value;
+    const aspectRatioContainer = document.getElementById('aspectRatioContainer');
+    
+    if (scalingMode === 'aspect' || scalingMode.startsWith('vscale')) {
+        aspectRatioContainer.style.display = 'block';
+    } else {
+        aspectRatioContainer.style.display = 'none';
+    }
 }
 
 function saveImage() {
@@ -835,16 +974,43 @@ function saveImage() {
         return;
     }
     
+    const outputWidth = scaledImageData.outputWidth || scaledImageData.width;
+    const outputHeight = scaledImageData.outputHeight || scaledImageData.height;
+    const scalingInfo = scaledImageData.scalingInfo;
+    
     const canvas = document.createElement('canvas');
-    canvas.width = scaledImageData.width;
-    canvas.height = scaledImageData.height;
+    canvas.width = outputWidth;
+    canvas.height = outputHeight;
     const ctx = canvas.getContext('2d');
-    ctx.putImageData(scaledImageData, 0, 0);
+    
+    // Clear canvas with black background
+    ctx.fillStyle = 'black';
+    ctx.fillRect(0, 0, outputWidth, outputHeight);
+    
+    if (scalingInfo) {
+        // Draw scaled image centered with black borders
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = scaledImageData.width;
+        tempCanvas.height = scaledImageData.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.putImageData(scaledImageData, 0, 0);
+        
+        ctx.drawImage(
+            tempCanvas,
+            scalingInfo.left,
+            scalingInfo.top,
+            scalingInfo.scaledWidth,
+            scalingInfo.scaledHeight
+        );
+    } else {
+        // Full screen mode - draw image at full size
+        ctx.putImageData(scaledImageData, 0, 0);
+    }
     
     // Add overlay text if enabled
     const showInfo = document.getElementById('showInfo').checked;
     if (showInfo) {
-        addInfoOverlay(ctx, scaledImageData.width, scaledImageData.height);
+        addInfoOverlay(ctx, outputWidth, outputHeight);
     }
     
     const link = document.createElement('a');
@@ -858,52 +1024,31 @@ function populateFilterDropdowns() {
     const vertDropdown = document.getElementById('vertFilterDropdown');
     const shadowMaskDropdown = document.getElementById('shadowMaskDropdown');
     
-    // Clear existing options except the first one
-    while (horzDropdown.options.length > 1) {
-        horzDropdown.remove(1);
-    }
-    while (vertDropdown.options.length > 1) {
-        vertDropdown.remove(1);
-    }
-    while (shadowMaskDropdown.options.length > 1) {
-        shadowMaskDropdown.remove(1);
-    }
+    // Store original lists
+    originalFilterNames = Object.keys(embeddedFilters).sort();
+    originalShadowMaskNames = Object.keys(window.shadowmasks || {}).sort();
     
-    // Add embedded filters to dropdowns
-    const filterNames = Object.keys(embeddedFilters).sort();
-    filterNames.forEach(filterName => {
-        const option1 = document.createElement('option');
-        option1.value = filterName;
-        option1.textContent = filterName;
-        horzDropdown.appendChild(option1);
-        
-        const option2 = document.createElement('option');
-        option2.value = filterName;
-        option2.textContent = filterName;
-        vertDropdown.appendChild(option2);
-    });
+    // Initialize filtered lists with original values
+    filteredFilterNames = [...originalFilterNames];
+    filteredShadowMaskNames = [...originalShadowMaskNames];
     
-    // Add embedded shadow masks to dropdown
-    const shadowMaskNames = Object.keys(window.shadowmasks || {}).sort();
-    shadowMaskNames.forEach(maskName => {
-        const option = document.createElement('option');
-        option.value = maskName;
-        option.textContent = maskName;
-        shadowMaskDropdown.appendChild(option);
-    });
+    // Populate dropdowns with filtered lists
+    updateFilterDropdown('horz');
+    updateFilterDropdown('vert');
+    updateShadowMaskDropdown();
     
     // Select and load default filters
-    if (filterNames.length > 0) {
-        let horzFilterToLoad = filterNames[0];
-        let vertFilterToLoad = filterNames[0];
+    if (originalFilterNames.length > 0) {
+        let horzFilterToLoad = originalFilterNames[0];
+        let vertFilterToLoad = originalFilterNames[0];
 
         // Check if default horizontal filter name exists
-        if (DEFAULT_HORZ_FILTER_NAME && filterNames.includes(DEFAULT_HORZ_FILTER_NAME)) {
+        if (DEFAULT_HORZ_FILTER_NAME && originalFilterNames.includes(DEFAULT_HORZ_FILTER_NAME)) {
             horzFilterToLoad = DEFAULT_HORZ_FILTER_NAME;
         }
         
         // Check if default vertical filter name exists
-        if (DEFAULT_VERT_FILTER_NAME && filterNames.includes(DEFAULT_VERT_FILTER_NAME)) {
+        if (DEFAULT_VERT_FILTER_NAME && originalFilterNames.includes(DEFAULT_VERT_FILTER_NAME)) {
             vertFilterToLoad = DEFAULT_VERT_FILTER_NAME;
         }
         
@@ -914,12 +1059,12 @@ function populateFilterDropdowns() {
     }
     
     // Load default shadow mask if available
-    if (shadowMaskNames.length > 0) {
+    if (originalShadowMaskNames.length > 0) {
         
-        let shadowmaskToLoad = shadowMaskNames[0];
+        let shadowmaskToLoad = originalShadowMaskNames[0];
         
         // Check if default shadowmask name exists
-        if (DEFAULT_SHADOWMASK_NAME && shadowMaskNames.includes(DEFAULT_SHADOWMASK_NAME)) {
+        if (DEFAULT_SHADOWMASK_NAME && originalShadowMaskNames.includes(DEFAULT_SHADOWMASK_NAME)) {
             shadowmaskToLoad = DEFAULT_SHADOWMASK_NAME;
         }
 
@@ -928,10 +1073,83 @@ function populateFilterDropdowns() {
     }
 }
 
+// Update filter dropdown based on current filtered list
+function updateFilterDropdown(axis) {
+    const dropdown = document.getElementById(`${axis}FilterDropdown`);
+    
+    // Clear existing options except the first one
+    while (dropdown.options.length > 1) {
+        dropdown.remove(1);
+    }
+    
+    // Add filtered options
+    filteredFilterNames.forEach(filterName => {
+        const option = document.createElement('option');
+        option.value = filterName;
+        option.textContent = filterName;
+        dropdown.appendChild(option);
+    });
+}
+
+// Update shadow mask dropdown based on current filtered list
+function updateShadowMaskDropdown() {
+    const dropdown = document.getElementById('shadowMaskDropdown');
+    
+    // Clear existing options except the first one
+    while (dropdown.options.length > 1) {
+        dropdown.remove(1);
+    }
+    
+    // Add filtered options
+    filteredShadowMaskNames.forEach(maskName => {
+        const option = document.createElement('option');
+        option.value = maskName;
+        option.textContent = maskName;
+        dropdown.appendChild(option);
+    });
+}
+
+// Filter function for filters
+function filterFilters(searchText) {
+    if (!searchText) {
+        return [...originalFilterNames];
+    }
+    
+    const lowerSearch = searchText.toLowerCase();
+    return originalFilterNames.filter(name =>
+        name.toLowerCase().includes(lowerSearch)
+    );
+}
+
+// Filter function for shadow masks
+function filterShadowMasks(searchText) {
+    if (!searchText) {
+        return [...originalShadowMaskNames];
+    }
+    
+    const lowerSearch = searchText.toLowerCase();
+    return originalShadowMaskNames.filter(name =>
+        name.toLowerCase().includes(lowerSearch)
+    );
+}
+
+// Handle filter search input
+function handleFilterSearch(axis, searchText) {
+    filteredFilterNames = filterFilters(searchText);
+    updateFilterDropdown(axis);
+}
+
+// Handle shadow mask search input
+function handleShadowMaskSearch(searchText) {
+    filteredShadowMaskNames = filterShadowMasks(searchText);
+    updateShadowMaskDropdown();
+}
+
 // Initialize when page loads
 document.addEventListener('DOMContentLoaded', function() {
     canvasContext = document.getElementById('previewCanvas').getContext('2d');
     populateFilterDropdowns();
+    updateAspectRatioVisibility();
     
     // Add event listener for auto-update checkbox
     document.getElementById('autoUpdate').addEventListener('change', function() {
@@ -991,5 +1209,33 @@ document.addEventListener('DOMContentLoaded', function() {
         if (document.getElementById('autoUpdate').checked && currentHorzFilter && currentVertFilter && originalImage) {
             processImage();
         }
+    });
+    
+    // Add event listeners for scaling mode changes
+    document.getElementById('scalingMode').addEventListener('change', function() {
+        updateAspectRatioVisibility();
+        if (document.getElementById('autoUpdate').checked && currentHorzFilter && currentVertFilter && originalImage) {
+            processImage();
+        }
+    });
+    
+    // Add event listener for aspect ratio changes
+    document.getElementById('aspectRatio').addEventListener('change', function() {
+        if (document.getElementById('autoUpdate').checked && currentHorzFilter && currentVertFilter && originalImage) {
+            processImage();
+        }
+    });
+    
+    // Add event listeners for search boxes
+    document.getElementById('horzFilterSearch').addEventListener('input', function() {
+        handleFilterSearch('horz', this.value);
+    });
+    
+    document.getElementById('vertFilterSearch').addEventListener('input', function() {
+        handleFilterSearch('vert', this.value);
+    });
+    
+    document.getElementById('shadowMaskSearch').addEventListener('input', function() {
+        handleShadowMaskSearch(this.value);
     });
 });
