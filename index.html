@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MiSTer Polyphase Filter Previewer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>MiSTer Polyphase Filter Previewer</h1>
+    
+    <div id="controls">
+        <div class="filter-group">
+            <h2>Horizontal Filter</h2>
+            <label for="horzFilterDropdown">Select Embedded Filter:</label>
+            <select id="horzFilterDropdown" onchange="loadEmbeddedFilter('horz', this.value)">
+                <option value="custom">Custom/File</option>
+            </select>
+            
+            <div class="file-loading-section">
+                <label for="horzFilterFile">Or Load Filter File:</label>
+                <input type="file" id="horzFilterFile" accept=".txt">
+                <button onclick="loadFilterFromFile('horz')">Load File</button>
+            </div>
+            
+            <button onclick="updateCoefficientsFromTextarea('horz')">Update Coefficients</button>
+        </div>
+
+        <div class="filter-group">
+            <h2>Vertical Filter</h2>
+            <label for="vertFilterDropdown">Select Embedded Filter:</label>
+            <select id="vertFilterDropdown" onchange="loadEmbeddedFilter('vert', this.value)">
+                <option value="custom">Custom/File</option>
+            </select>
+            
+            <div class="file-loading-section">
+                <label for="vertFilterFile">Or Load Filter File:</label>
+                <input type="file" id="vertFilterFile" accept=".txt">
+                <button onclick="loadFilterFromFile('vert')">Load File</button>
+            </div>
+            
+            <button onclick="updateCoefficientsFromTextarea('vert')">Update Coefficients</button>
+        </div>
+
+        <div class="settings-group">
+            <h2>Scaling Settings</h2>
+            <label for="inputImage">Input Image:</label>
+            <input type="file" id="inputImage" accept="image/png">
+            
+            <label for="outputWidth">Output Width (px):</label>
+            <input type="number" id="outputWidth" value="1440" min="1">
+            
+            <label for="outputHeight">Output Height (px):</label>
+            <input type="number" id="outputHeight" value="1080" min="1">
+            
+            <label for="showInfo">Show Filter Info Overlay:</label>
+            <input type="checkbox" id="showInfo" checked>
+            
+            <label for="autoUpdate">Auto-update scaled image:</label>
+            <input type="checkbox" id="autoUpdate" checked>
+            
+            <button onclick="processImage()" id="processButton" disabled>Scale & Preview</button>
+            <button onclick="saveImage()" id="saveButton" disabled>Save Scaled Image</button>
+        </div>
+    </div>
+
+    <div id="previewArea">
+        <h2>Preview Window</h2>
+        <div id="imageContainer">
+            <canvas id="previewCanvas"></canvas>
+        </div>
+    </div>
+
+    <div id="filterCoefficients" class="coefficient-editor">
+        <div id="horzCoeffsContainer" class="coeff-container">
+            <h3>Horizontal Coefficients (<span id="horzFilterName">None Loaded</span>)</h3>
+            <textarea id="horzCoeffs" rows="15" placeholder="Filter coefficients will appear here after loading a filter. You can edit them and click 'Update Coefficients' to apply changes."></textarea>
+        </div>
+        <div id="vertCoeffsContainer" class="coeff-container">
+            <h3>Vertical Coefficients (<span id="vertFilterName">None Loaded</span>)</h3>
+            <textarea id="vertCoeffs" rows="15" placeholder="Filter coefficients will appear here after loading a filter. You can edit them and click 'Update Coefficients' to apply changes."></textarea>
+        </div>
+    </div>
+
+
+
+    <script src="filters.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
