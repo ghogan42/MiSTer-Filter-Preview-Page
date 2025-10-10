@@ -42,6 +42,27 @@
             <button onclick="updateCoefficientsFromTextarea('vert')">Update Coefficients</button>
         </div>
 
+        <div class="filter-group">
+            <h2>Shadow Mask</h2>
+            <label for="shadowMaskDropdown">Select Embedded Mask:</label>
+            <select id="shadowMaskDropdown" onchange="loadEmbeddedShadowMask(this.value)">
+                <option value="custom">Custom/File</option>
+            </select>
+            
+            <div class="file-loading-section">
+                <label for="shadowMaskFile">Or Load Mask File:</label>
+                <input type="file" id="shadowMaskFile" accept=".txt">
+                <button onclick="loadShadowMaskFromFile()">Load File</button>
+            </div>
+            
+            <button onclick="updateShadowMaskFromTextarea()">Update Mask</button>
+            
+            <label for="applyShadowMask">Apply Shadow Mask:</label>
+            <input type="checkbox" id="applyShadowMask" checked>
+            <label for="shadowMask2x">2x:</label>
+            <input type="checkbox" id="shadowMask2x">
+        </div>
+
         <div class="settings-group">
             <h2>Scaling Settings</h2>
             <label for="inputImage">Input Image:</label>
@@ -80,11 +101,16 @@
             <h3>Vertical Coefficients (<span id="vertFilterName">None Loaded</span>)</h3>
             <textarea id="vertCoeffs" rows="15" placeholder="Filter coefficients will appear here after loading a filter. You can edit them and click 'Update Coefficients' to apply changes."></textarea>
         </div>
+        <div id="shadowMaskContainer" class="coeff-container">
+            <h3>Shadow Mask (<span id="shadowMaskName">None Loaded</span>)</h3>
+            <textarea id="shadowMaskCoeffs" rows="15" placeholder="Shadow mask pattern will appear here after loading a mask. You can edit it and click 'Update Mask' to apply changes."></textarea>
+        </div>
     </div>
 
 
 
     <script src="filters.js"></script>
+    <script src="shadowmasks.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

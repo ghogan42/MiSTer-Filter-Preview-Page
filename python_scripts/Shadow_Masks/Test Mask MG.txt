@@ -1,0 +1,14 @@
+####
+# Type: CRT
+# Genre: Bright
+# Sub-Pixel Layout: GBR
+####
+
+Resolution=0
+v2
+2,5
+52d,22d
+52d,22d
+52d,22d
+22d,52d
+22d,52d

@@ -126,8 +126,8 @@ button:disabled {
     margin-bottom: 25px;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-    gap: 25px;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 20px;
 }
 
 .coeff-container {
