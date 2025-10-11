@@ -280,7 +280,7 @@ let canvasContext = null;
 const DEFAULT_HORZ_FILTER_NAME = 'Upscaling - Lanczos Bicubic etc/lanczos3_10.txt'; // Set to filter name string for default horizontal filter
 const DEFAULT_VERT_FILTER_NAME = 'Scanlines - Adaptive/SLA_Dk_040_Br_070.txt'; // Set to filter name string for default vertical filter
 const DEFAULT_SHADOWMASK_NAME = 'Complex (Multichromatic)/Other/Stripe/MG Stripe (Magenta Green).txt'; // Set to filter name string for default vertical filter
-const DEFAULT_GAMMA_NAME = 'CRT Simulation.txt'; // Set to gamma name string for default gamma
+const DEFAULT_GAMMA_NAME = 'Poly_Gamma/Poly 2.7.txt'; // Set to gamma name string for default gamma
 
 // Global variables for search functionality
 let originalFilterNames = [];
