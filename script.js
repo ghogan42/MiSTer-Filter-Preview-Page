@@ -56,45 +56,140 @@ function parseMask(mask) {
 // --- Load the mask pattern from text ---
 function loadMaskPattern(maskText) {
     const lines = maskText.split('\n');
-    
-    let width = 0, height = 0;
-    const patternRows = [];
+    const patterns = [];
+    let currentResolution = 0;
+    let currentWidth = 0;
+    let currentHeight = 0;
+    let currentPatternRows = [];
+    let inPattern = false;
     
     for (let line of lines) {
         line = line.trim();
-        if (line === '' || line.startsWith('#') || line.startsWith('####')) continue;
         
-        // e.g., "2,5"
-        if (line.match(/^\d+,\d+$/)) {
-            const parts = line.split(',');
-            width = parseInt(parts[0]);
-            height = parseInt(parts[1]);
+        // Skip empty lines and comments
+        if (line === '' || line.startsWith('#') || line.startsWith('####')) {
             continue;
         }
         
-        // e.g., "54f,24f"
-        if (line.includes(',')) {
-            patternRows.push(line.split(','));
+        // Check for resolution line
+        if (line.startsWith('Resolution=')) {
+            // If we were in a pattern, save it before starting new one
+            if (inPattern) {
+                if (currentWidth === 0 || currentHeight === 0) {
+                    throw new Error('Mask text missing width/height definition.');
+                }
+                
+                const pattern = new Array(currentHeight);
+                for (let y = 0; y < currentHeight; y++) {
+                    pattern[y] = new Array(currentWidth);
+                    for (let x = 0; x < currentWidth; x++) {
+                        pattern[y][x] = parseMask(currentPatternRows[y][x]);
+                    }
+                }
+                
+                patterns.push({
+                    resolution: currentResolution,
+                    pattern: pattern
+                });
+                
+                // Reset for next pattern
+                currentPatternRows = [];
+                currentWidth = 0;
+                currentHeight = 0;
+                inPattern = false;
+            }
+            
+            // Parse resolution value
+            const resolutionMatch = line.match(/Resolution=(\d+)/);
+            if (resolutionMatch) {
+                currentResolution = parseInt(resolutionMatch[1]);
+            } else {
+                currentResolution = 0;
+            }
+            continue;
+        }
+        
+        // Check for pattern version line (v2)
+        if (line === 'v2') {
+            inPattern = true;
+            continue;
+        }
+        
+        // If we're in a pattern, parse width/height and pattern rows
+        if (inPattern) {
+            // e.g., "2,5"
+            if (line.match(/^\d+,\d+$/)) {
+                const parts = line.split(',');
+                currentWidth = parseInt(parts[0]);
+                currentHeight = parseInt(parts[1]);
+                continue;
+            }
+            
+            // e.g., "54f,24f"
+            if (line.includes(',')) {
+                currentPatternRows.push(line.split(','));
+            }
         }
     }
     
-    if (width === 0 || height === 0) {
-        throw new Error('Mask text missing width/height definition.');
+    // Handle the last pattern if file ends without another Resolution line
+    if (inPattern && currentPatternRows.length > 0) {
+        if (currentWidth === 0 || currentHeight === 0) {
+            throw new Error('Mask text missing width/height definition.');
+        }
+        
+        const pattern = new Array(currentHeight);
+        for (let y = 0; y < currentHeight; y++) {
+            pattern[y] = new Array(currentWidth);
+            for (let x = 0; x < currentWidth; x++) {
+                pattern[y][x] = parseMask(currentPatternRows[y][x]);
+            }
+        }
+        
+        patterns.push({
+            resolution: currentResolution,
+            pattern: pattern
+        });
     }
     
-    const pattern = new Array(height);
-    for (let y = 0; y < height; y++) {
-        pattern[y] = new Array(width);
-        for (let x = 0; x < width; x++) {
-            pattern[y][x] = parseMask(patternRows[y][x]);
+    if (patterns.length === 0) {
+        throw new Error('No valid patterns found in mask text.');
+    }
+    
+    return patterns;
+}
+
+// --- Select the appropriate pattern based on output resolution ---
+function selectPatternForResolution(patterns, outputHeight) {
+    if (!patterns || patterns.length === 0) {
+        throw new Error('No patterns available for selection');
+    }
+    
+    // Sort patterns by resolution in descending order
+    const sortedPatterns = [...patterns].sort((a, b) => b.resolution - a.resolution);
+    
+    // Find the first pattern where outputHeight >= pattern resolution
+    for (const patternData of sortedPatterns) {
+        if (outputHeight >= patternData.resolution) {
+            return patternData.pattern;
         }
     }
     
-    return pattern;
+    // If no pattern matches, use the pattern with the lowest resolution (should be Resolution=0)
+    return sortedPatterns[sortedPatterns.length - 1].pattern;
 }
 
 // --- Apply the shadowmask pattern over an ImageData ---
-function applyMaskToImage(imageData, pattern, is2x = false) {
+function applyMaskToImage(imageData, patterns, is2x = false, outputHeight = null) {
+    // If patterns is already a single pattern (backward compatibility), use it directly
+    let pattern;
+    if (Array.isArray(patterns) && patterns[0] && patterns[0].resolution !== undefined) {
+        // It's an array of pattern objects with resolution
+        pattern = selectPatternForResolution(patterns, outputHeight || imageData.height);
+    } else {
+        // It's a single pattern (old format)
+        pattern = patterns;
+    }
     const maskHeight = pattern.length;
     const maskWidth = pattern[0].length;
     const width = imageData.width;
@@ -176,6 +271,7 @@ const embeddedFilters = window.filters || {};
 let currentHorzFilter = null;
 let currentVertFilter = null;
 let currentShadowMask = null;
+let currentGamma = null;
 let originalImage = null;
 let scaledImageData = null;
 let canvasContext = null;
@@ -184,12 +280,15 @@ let canvasContext = null;
 const DEFAULT_HORZ_FILTER_NAME = 'Upscaling - Lanczos Bicubic etc/lanczos3_10.txt'; // Set to filter name string for default horizontal filter
 const DEFAULT_VERT_FILTER_NAME = 'Scanlines - Adaptive/SLA_Dk_040_Br_070.txt'; // Set to filter name string for default vertical filter
 const DEFAULT_SHADOWMASK_NAME = 'Complex (Multichromatic)/Other/Stripe/MG Stripe (Magenta Green).txt'; // Set to filter name string for default vertical filter
+const DEFAULT_GAMMA_NAME = 'CRT Simulation.txt'; // Set to gamma name string for default gamma
 
 // Global variables for search functionality
 let originalFilterNames = [];
 let originalShadowMaskNames = [];
+let originalGammaNames = [];
 let filteredFilterNames = [];
 let filteredShadowMaskNames = [];
+let filteredGammaNames = [];
 
 function clampPixelIndex(index, maxIndex) {
     return Math.max(0, Math.min(index, maxIndex));
@@ -694,6 +793,190 @@ function updateShadowMaskFromTextarea() {
     }
 }
 
+function parseGammaText(gammaText) {
+    const lines = gammaText.split('\n');
+    const gammaTable = {
+        rTable: new Array(256),
+        gTable: new Array(256),
+        bTable: new Array(256)
+    };
+    
+    let lineCount = 0;
+    let isThreeChannelFormat = false;
+    
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        
+        // Skip empty lines and comments
+        if (line === '' || line.startsWith('#')) {
+            continue;
+        }
+        
+        // Check if line contains commas (three-channel format)
+        if (line.includes(',')) {
+            isThreeChannelFormat = true;
+            const parts = line.split(',').map(part => parseInt(part.trim(), 10));
+            
+            if (parts.length === 3) {
+                if (lineCount >= 256) {
+                    throw new Error('Gamma table has more than 256 entries');
+                }
+                
+                gammaTable.rTable[lineCount] = Math.max(0, Math.min(255, parts[0]));
+                gammaTable.gTable[lineCount] = Math.max(0, Math.min(255, parts[1]));
+                gammaTable.bTable[lineCount] = Math.max(0, Math.min(255, parts[2]));
+                lineCount++;
+            } else {
+                throw new Error(`Expected 3 values per line for three-channel gamma format, got ${parts.length}`);
+            }
+        } else {
+            // Single channel format
+            const value = parseInt(line, 10);
+            if (!isNaN(value)) {
+                if (lineCount >= 256) {
+                    throw new Error('Gamma table has more than 256 entries');
+                }
+                
+                const clampedValue = Math.max(0, Math.min(255, value));
+                gammaTable.rTable[lineCount] = clampedValue;
+                gammaTable.gTable[lineCount] = clampedValue;
+                gammaTable.bTable[lineCount] = clampedValue;
+                lineCount++;
+            }
+        }
+    }
+    
+    // Check if we have exactly 256 entries
+    if (lineCount !== 256) {
+        throw new Error(`Gamma table must have exactly 256 entries, got ${lineCount}`);
+    }
+    
+    console.log(`Gamma table parsed: ${isThreeChannelFormat ? 'three-channel' : 'single-channel'} format`);
+    return gammaTable;
+}
+
+function applyGammaToImage(imageData, gammaTable) {
+    const data = imageData.data;
+    const width = imageData.width;
+    const height = imageData.height;
+    
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            const index = (y * width + x) * 4;
+            
+            // Get original RGB values
+            const r = data[index];
+            const g = data[index + 1];
+            const b = data[index + 2];
+            
+            // Apply gamma correction using lookup tables
+            data[index] = gammaTable.rTable[r];
+            data[index + 1] = gammaTable.gTable[g];
+            data[index + 2] = gammaTable.bTable[b];
+            // Alpha channel remains unchanged
+        }
+    }
+    
+    return imageData;
+}
+
+function loadEmbeddedGamma(gammaName) {
+    const textarea = document.getElementById('gammaCoeffs');
+    const gammaNameSpan = document.getElementById('gammaName');
+    const fileInput = document.getElementById('gammaFile');
+    
+    if (gammaName === 'custom') {
+        // Clear the gamma if custom is selected
+        currentGamma = null;
+        textarea.value = '';
+        gammaNameSpan.textContent = 'None';
+        fileInput.value = '';
+        return;
+    }
+    
+    const gammaData = window.gammas[gammaName];
+    if (!gammaData) {
+        alert(`Embedded gamma "${gammaName}" not found`);
+        return;
+    }
+    
+    try {
+        // Parse and store the gamma tables
+        currentGamma = parseGammaText(gammaData);
+        
+        // Display gamma data in textarea
+        textarea.value = gammaData;
+        textarea.readOnly = false;
+        gammaNameSpan.textContent = gammaName;
+        
+        // Clear file input
+        fileInput.value = '';
+        
+        // Trigger auto-update if enabled
+        if (document.getElementById('autoUpdate').checked && currentHorzFilter && currentVertFilter && originalImage) {
+            processImage();
+        }
+        
+    } catch (error) {
+        alert(`Error loading embedded gamma: ${error.message}`);
+    }
+}
+
+async function loadGammaFromFile() {
+    const fileInput = document.getElementById('gammaFile');
+    const textarea = document.getElementById('gammaCoeffs');
+    const gammaNameSpan = document.getElementById('gammaName');
+    const dropdown = document.getElementById('gammaDropdown');
+    
+    if (!fileInput.files || fileInput.files.length === 0) {
+        alert('Please select a gamma file');
+        return;
+    }
+    
+    const file = fileInput.files[0];
+    
+    try {
+        const gammaText = await readFileAsText(file);
+        // Parse and store the gamma tables
+        currentGamma = parseGammaText(gammaText);
+        
+        // Display gamma data in textarea
+        textarea.value = gammaText;
+        textarea.readOnly = false;
+        gammaNameSpan.textContent = file.name.replace('.txt', '');
+        
+        // Reset dropdown to "Custom" option
+        dropdown.value = 'custom';
+        
+        // Trigger auto-update if enabled
+        if (document.getElementById('autoUpdate').checked && currentHorzFilter && currentVertFilter && originalImage) {
+            processImage();
+        }
+        
+    } catch (error) {
+        alert(`Error loading gamma: ${error.message}`);
+    }
+}
+
+function updateGammaFromTextarea() {
+    const textarea = document.getElementById('gammaCoeffs');
+    const gammaNameSpan = document.getElementById('gammaName');
+    
+    try {
+        // Parse and store the gamma tables
+        currentGamma = parseGammaText(textarea.value);
+        gammaNameSpan.textContent = 'Custom';
+        
+        // Trigger auto-update if enabled
+        if (document.getElementById('autoUpdate').checked && currentHorzFilter && currentVertFilter && originalImage) {
+            processImage();
+        }
+        
+    } catch (error) {
+        alert(`Error parsing gamma: ${error.message}`);
+    }
+}
+
 // --- Compute scaled size according to MiSTer vscale modes ---
 function computeScaledSize(inputWidth, inputHeight, outputWidth, outputHeight, aspectRatio, vscaleMode) {
     // Determine step size
@@ -786,6 +1069,13 @@ async function processImage() {
         let targetHeight = outputHeight;
         let scalingInfo = null;
         
+        // Apply gamma correction as the first step (before scaling) if enabled and loaded
+        const applyGamma = document.getElementById('applyGamma').checked;
+        if (applyGamma && currentGamma) {
+            console.log('Applying gamma correction');
+            applyGammaToImage(imageData, currentGamma);
+        }
+        
         // Determine scaling parameters based on mode
         switch (scalingMode) {
             case 'fullscreen':
@@ -828,7 +1118,7 @@ async function processImage() {
         // Apply shadow mask if enabled and loaded
         if (applyShadowMask && currentShadowMask) {
             console.log('Applying shadow mask' + (shadowMask2x ? ' (2x)' : ''));
-            scaledImageData = applyMaskToImage(scaledImageData, currentShadowMask, shadowMask2x);
+            scaledImageData = applyMaskToImage(scaledImageData, currentShadowMask, shadowMask2x, outputHeight);
         }
         
         // Store scaling info for display
@@ -1023,19 +1313,23 @@ function populateFilterDropdowns() {
     const horzDropdown = document.getElementById('horzFilterDropdown');
     const vertDropdown = document.getElementById('vertFilterDropdown');
     const shadowMaskDropdown = document.getElementById('shadowMaskDropdown');
+    const gammaDropdown = document.getElementById('gammaDropdown');
     
     // Store original lists
     originalFilterNames = Object.keys(embeddedFilters).sort();
     originalShadowMaskNames = Object.keys(window.shadowmasks || {}).sort();
+    originalGammaNames = Object.keys(window.gammas || {}).sort();
     
     // Initialize filtered lists with original values
     filteredFilterNames = [...originalFilterNames];
     filteredShadowMaskNames = [...originalShadowMaskNames];
+    filteredGammaNames = [...originalGammaNames];
     
     // Populate dropdowns with filtered lists
     updateFilterDropdown('horz');
     updateFilterDropdown('vert');
     updateShadowMaskDropdown();
+    updateGammaDropdown();
     
     // Select and load default filters
     if (originalFilterNames.length > 0) {
@@ -1070,6 +1364,20 @@ function populateFilterDropdowns() {
 
         shadowMaskDropdown.value = shadowmaskToLoad;
         loadEmbeddedShadowMask(shadowmaskToLoad);
+    }
+    
+    // Load default gamma if available
+    if (originalGammaNames.length > 0) {
+        
+        let gammaToLoad = originalGammaNames[0];
+        
+        // Check if default gamma name exists
+        if (DEFAULT_GAMMA_NAME && originalGammaNames.includes(DEFAULT_GAMMA_NAME)) {
+            gammaToLoad = DEFAULT_GAMMA_NAME;
+        }
+
+        gammaDropdown.value = gammaToLoad;
+        loadEmbeddedGamma(gammaToLoad);
     }
 }
 
@@ -1109,6 +1417,24 @@ function updateShadowMaskDropdown() {
     });
 }
 
+// Update gamma dropdown based on current filtered list
+function updateGammaDropdown() {
+    const dropdown = document.getElementById('gammaDropdown');
+    
+    // Clear existing options except the first one
+    while (dropdown.options.length > 1) {
+        dropdown.remove(1);
+    }
+    
+    // Add filtered options
+    filteredGammaNames.forEach(gammaName => {
+        const option = document.createElement('option');
+        option.value = gammaName;
+        option.textContent = gammaName;
+        dropdown.appendChild(option);
+    });
+}
+
 // Filter function for filters
 function filterFilters(searchText) {
     if (!searchText) {
@@ -1133,6 +1459,18 @@ function filterShadowMasks(searchText) {
     );
 }
 
+// Filter function for gamma files
+function filterGammas(searchText) {
+    if (!searchText) {
+        return [...originalGammaNames];
+    }
+    
+    const lowerSearch = searchText.toLowerCase();
+    return originalGammaNames.filter(name =>
+        name.toLowerCase().includes(lowerSearch)
+    );
+}
+
 // Handle filter search input
 function handleFilterSearch(axis, searchText) {
     filteredFilterNames = filterFilters(searchText);
@@ -1143,6 +1481,12 @@ function handleFilterSearch(axis, searchText) {
 function handleShadowMaskSearch(searchText) {
     filteredShadowMaskNames = filterShadowMasks(searchText);
     updateShadowMaskDropdown();
+}
+
+// Handle gamma search input
+function handleGammaSearch(searchText) {
+    filteredGammaNames = filterGammas(searchText);
+    updateGammaDropdown();
 }
 
 // Initialize when page loads
@@ -1237,5 +1581,36 @@ document.addEventListener('DOMContentLoaded', function() {
     
     document.getElementById('shadowMaskSearch').addEventListener('input', function() {
         handleShadowMaskSearch(this.value);
+    });
+    
+    // Add event listener for gamma dropdown to trigger auto-update
+    document.getElementById('gammaDropdown').addEventListener('change', function() {
+        if (document.getElementById('autoUpdate').checked && currentHorzFilter && currentVertFilter && originalImage) {
+            processImage();
+        }
+    });
+    
+    // Add event listener for gamma checkbox to trigger auto-update
+    document.getElementById('applyGamma').addEventListener('change', function() {
+        if (document.getElementById('autoUpdate').checked && currentHorzFilter && currentVertFilter && originalImage) {
+            processImage();
+        }
+    });
+    
+    // Add event listener for gamma textarea changes to trigger auto-update
+    document.getElementById('gammaCoeffs').addEventListener('input', function() {
+        if (document.getElementById('autoUpdate').checked && currentHorzFilter && currentVertFilter && originalImage) {
+            // Use a small delay to avoid processing on every keystroke
+            clearTimeout(window.gammaUpdateTimeout);
+            window.gammaUpdateTimeout = setTimeout(function() {
+                updateGammaFromTextarea();
+                processImage();
+            }, 500);
+        }
+    });
+    
+    // Add event listener for gamma search input
+    document.getElementById('gammaSearch').addEventListener('input', function() {
+        handleGammaSearch(this.value);
     });
 });

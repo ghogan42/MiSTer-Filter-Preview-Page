@@ -72,10 +72,38 @@
             
             <button onclick="updateShadowMaskFromTextarea()">Update Mask</button>
             
-            <label for="applyShadowMask">Apply Shadow Mask:</label>
-            <input type="checkbox" id="applyShadowMask" checked>
-            <label for="shadowMask2x">2x:</label>
-            <input type="checkbox" id="shadowMask2x">
+            <div class="shadowmask-options">
+                <label for="applyShadowMask">Apply Shadow Mask:</label>
+                <input type="checkbox" id="applyShadowMask" checked>
+                <label for="shadowMask2x">2x:</label>
+                <input type="checkbox" id="shadowMask2x">
+            </div>
+        </div>
+
+        <div class="filter-group">
+            <h2>Gamma Correction</h2>
+            <label for="gammaDropdown">Select Embedded Gamma:</label>
+            <select id="gammaDropdown" onchange="loadEmbeddedGamma(this.value)">
+                <option value="custom">Custom/File</option>
+            </select>
+            
+            <div class="search-box">
+                <label for="gammaSearch">Search Gamma Files:</label>
+                <input type="text" id="gammaSearch" placeholder="Type to filter...">
+            </div>
+            
+            <div class="file-loading-section">
+                <label for="gammaFile">Or Load Gamma File:</label>
+                <input type="file" id="gammaFile" accept=".txt">
+                <button onclick="loadGammaFromFile()">Load File</button>
+            </div>
+            
+            <button onclick="updateGammaFromTextarea()">Update Gamma</button>
+            
+            <div class="gamma-options">
+                <label for="applyGamma">Apply Gamma Correction:</label>
+                <input type="checkbox" id="applyGamma" checked>
+            </div>
         </div>
 
         <div class="settings-group">
@@ -134,12 +162,17 @@
             <h3>Shadow Mask (<span id="shadowMaskName">None Loaded</span>)</h3>
             <textarea id="shadowMaskCoeffs" rows="15" placeholder="Shadow mask pattern will appear here after loading a mask. You can edit it and click 'Update Mask' to apply changes."></textarea>
         </div>
+        <div id="gammaContainer" class="coeff-container">
+            <h3>Gamma Correction (<span id="gammaName">None Loaded</span>)</h3>
+            <textarea id="gammaCoeffs" rows="15" placeholder="Gamma correction table will appear here after loading a gamma file. You can edit it and click 'Update Gamma' to apply changes."></textarea>
+        </div>
     </div>
 
 
 
     <script src="filters.js"></script>
     <script src="shadowmasks.js"></script>
+    <script src="gammas.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

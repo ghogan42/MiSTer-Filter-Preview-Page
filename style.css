@@ -71,7 +71,7 @@ label {
     margin-bottom: 5px;
 }
 
-select, input[type="file"], input[type="number"], input[type="checkbox"] {
+select, input[type="file"], input[type="number"], input[type="checkbox"], input[type="text"] {
     padding: 8px 12px;
     border: 2px solid #ddd;
     border-radius: 5px;
@@ -79,12 +79,12 @@ select, input[type="file"], input[type="number"], input[type="checkbox"] {
     transition: border-color 0.3s ease;
 }
 
-select:focus, input[type="number"]:focus {
+select:focus, input[type="number"]:focus, input[type="text"]:focus {
     outline: none;
     border-color: #667eea;
 }
 
-input[type="number"] {
+input[type="number"], input[type="text"] {
     width: 100%;
 }
 
@@ -263,4 +263,56 @@ textarea:read-only {
     font-size: 14px;
     font-weight: bold;
     color: #333;
+}
+
+/* Search box styling */
+.search-box {
+    margin-top: 5px;
+    padding-top: 5px;
+    border-top: 1px dashed #eee;
+}
+
+.search-box label {
+    font-weight: normal;
+    color: #666;
+    font-size: 0.9em;
+    margin-bottom: 3px;
+}
+
+.search-box input[type="text"] {
+    margin-top: 5px;
+}
+
+/* Shadowmask options - side by side checkboxes */
+.shadowmask-options {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-top: 10px;
+}
+
+.shadowmask-options label {
+    margin-bottom: 0;
+    white-space: nowrap;
+}
+
+.shadowmask-options input[type="checkbox"] {
+    margin-right: 5px;
+}
+
+/* Gamma options - side by side checkboxes */
+.gamma-options {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-top: 10px;
+}
+
+.gamma-options label {
+    margin-bottom: 0;
+    white-space: nowrap;
+}
+
+.gamma-options input[type="checkbox"] {
+    margin-right: 5px;
 }
