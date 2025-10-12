@@ -2,7 +2,8 @@
 # Generates a 256-line lookup table from (0,0,0) to (225,237,255)
 # using a power curve with exponent 1.125
 
-EXPONENT = 1.1091
+# We shold use 1.125 or something but I'm not 
+EXPONENT = 1.0
 MAX_R, MAX_G, MAX_B = 225, 237, 255
 
 with open("d93_to_srgb_lut.txt", "w") as f:
@@ -15,4 +16,4 @@ with open("d93_to_srgb_lut.txt", "w") as f:
         B = round(MAX_B * t)
         f.write(f"{R}, {G}, {B}\n")
 
-print("✅ Wrote d93_to_srgb_lut.txt (256 lines from 0,0,0 → 255,248,240)")
+print("✅ Wrote d93_to_srgb_lut.txt (256 lines from 0,0,0 → 225,237,255)")

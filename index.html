@@ -115,7 +115,7 @@
             <select id="scalingMode">
                 <option value="fullscreen">Full Screen</option>
                 <option value="aspect">Aspect Ratio</option>
-                <option value="vscale1">vscale_mode = 1</option>
+                <option value="vscale1" selected>vscale_mode = 1</option>
                 <option value="vscale2">vscale_mode = 2</option>
                 <option value="vscale3">vscale_mode = 3</option>
             </select>
@@ -126,7 +126,7 @@
             </div>
             
             <label for="outputWidth">Output Width (px):</label>
-            <input type="number" id="outputWidth" value="1440" min="1">
+            <input type="number" id="outputWidth" value="1920" min="1">
             
             <label for="outputHeight">Output Height (px):</label>
             <input type="number" id="outputHeight" value="1080" min="1">
@@ -144,6 +144,10 @@
 
     <div id="previewArea">
         <h2>Preview Window</h2>
+        <div class="preview-options">
+            <label for="fitToWidth">Fit to width:</label>
+            <input type="checkbox" id="fitToWidth" checked>
+        </div>
         <div id="imageContainer">
             <canvas id="previewCanvas"></canvas>
         </div>

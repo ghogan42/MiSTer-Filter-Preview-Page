@@ -551,24 +551,8 @@ async function loadFilterFromFile(axis) {
             currentVertFilter = filterData;
         }
         
-        // Display coefficients in textarea
-        let coeffText = '';
-        if (filterData.isAdaptive) {
-            coeffText += '# Dark coefficients (low brightness)\n';
-            filterData.darkCoefficients.forEach(coeffs => {
-                coeffText += coeffs.join(', ') + '\n';
-            });
-            coeffText += '\n# Light coefficients (high brightness)\n';
-            filterData.lightCoefficients.forEach(coeffs => {
-                coeffText += coeffs.join(', ') + '\n';
-            });
-        } else {
-            filterData.coefficients.forEach(coeffs => {
-                coeffText += coeffs.join(', ') + '\n';
-            });
-        }
-        
-        textarea.value = coeffText;
+        // Display original filter text in textarea
+        textarea.value = filterText;
         textarea.readOnly = false;
         filterNameSpan.textContent = file.name.replace('.txt', '');
         
@@ -617,24 +601,8 @@ function loadEmbeddedFilter(axis, filterName) {
             currentVertFilter = filterObj;
         }
         
-        // Display coefficients in textarea
-        let coeffText = '';
-        if (filterObj.isAdaptive) {
-            coeffText += '# Dark coefficients (low brightness)\n';
-            filterObj.darkCoefficients.forEach(coeffs => {
-                coeffText += coeffs.join(', ') + '\n';
-            });
-            coeffText += '\n# Light coefficients (high brightness)\n';
-            filterObj.lightCoefficients.forEach(coeffs => {
-                coeffText += coeffs.join(', ') + '\n';
-            });
-        } else {
-            filterObj.coefficients.forEach(coeffs => {
-                coeffText += coeffs.join(', ') + '\n';
-            });
-        }
-        
-        textarea.value = coeffText;
+        // Display original filter text in textarea
+        textarea.value = filterData;
         textarea.readOnly = false;
         filterNameSpan.textContent = filterName;
         
@@ -1182,6 +1150,14 @@ function displayImage(imageData) {
     canvas.width = outputWidth;
     canvas.height = outputHeight;
     
+    // Apply or remove "no-fit" class based on checkbox state
+    const fitToWidth = document.getElementById('fitToWidth').checked;
+    if (fitToWidth) {
+        canvas.classList.remove('no-fit');
+    } else {
+        canvas.classList.add('no-fit');
+    }
+    
     // Clear canvas with black background
     ctx.fillStyle = 'black';
     ctx.fillRect(0, 0, outputWidth, outputHeight);
@@ -1569,7 +1545,14 @@ document.addEventListener('DOMContentLoaded', function() {
             processImage();
         }
     });
-    
+
+    // Add event listener for fit to width checkbox
+    document.getElementById('fitToWidth').addEventListener('change', function() {
+        if (scaledImageData) {
+            displayImage(scaledImageData);
+        }
+    });
+
     // Add event listeners for search boxes
     document.getElementById('horzFilterSearch').addEventListener('input', function() {
         handleFilterSearch('horz', this.value);
