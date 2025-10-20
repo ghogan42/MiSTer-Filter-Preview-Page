@@ -1,0 +1,17 @@
+# macOS system files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnail files
+Icon?
+.Spotlight-V100
+.Trashes
+
+# macOS metadata on network shares
+._*
+
+# Logs and temporary files
+*.log
+*.tmp
+
