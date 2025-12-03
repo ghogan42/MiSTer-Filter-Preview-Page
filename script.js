@@ -340,14 +340,22 @@ function applyPolyphaseFilter(imageData, filterData, sourceSize, destSize, axis)
                 const t0 = clampPixelIndex(baseIndex - 1, maxIndex);
                 const t1 = clampPixelIndex(baseIndex, maxIndex);
                 const t2 = clampPixelIndex(baseIndex + 1, maxIndex);
-                const t3 = clampPixelIndex(baseIndex + 2, maxIndex);
-                
+                const t3 = clampPixelIndex(baseIndex + 2, maxIndex);    
+
+                //get center tap max of Red/Green brightness to use as a weight later
+                const t1R = getPixelValue(imageData, t1, y, 0); // Red channel
+                const t1G = getPixelValue(imageData, t1, y, 1); // Green channel
+                const t1B = getPixelValue(imageData, t1, y, 2); // Blue channel
+
+                let luma = Math.max(t1R, Math.max(t1G, t1B));
+                let lumaNormalized = luma / 255.0
+
                 for (let channel = 0; channel < 3; channel++) { // RGB channels
                     const t0Val = getPixelValue(imageData, t0, y, channel);
                     const t1Val = getPixelValue(imageData, t1, y, channel);
                     const t2Val = getPixelValue(imageData, t2, y, channel);
                     const t3Val = getPixelValue(imageData, t3, y, channel);
-                    
+
                     if (filterData.isAdaptive && filterData.lightCoefficients) {
                         const lightCoeffs = filterData.lightCoefficients[phase];
                         
@@ -356,13 +364,9 @@ function applyPolyphaseFilter(imageData, filterData, sourceSize, destSize, axis)
                         
                         const lightOutput = (lightCoeffs[0] * t0Val + lightCoeffs[1] * t1Val +
                                            lightCoeffs[2] * t2Val + lightCoeffs[3] * t3Val) / filterData.fullBrightness;
-                        
-                        // Interpolate based on center tap brightness (t1)
-                        let t1Normalized = t1Val / 255.0;
-                        t1Normalized = Math.max(0.0, Math.min(1.0, t1Normalized));
-                        
-                        // Blend: higher brightness uses more light filter
-                        const output = t1Normalized * lightOutput + (1.0 - t1Normalized) * darkOutput;
+
+                        // Blend: higher luma uses more of the light filter
+                        const output = lumaNormalized * lightOutput + (1.0 - lumaNormalized) * darkOutput;
                         
                         setPixelValue(destImageData, i, y, channel, output);
                     } else {
@@ -384,6 +388,13 @@ function applyPolyphaseFilter(imageData, filterData, sourceSize, destSize, axis)
                 const t1 = clampPixelIndex(baseIndex, maxIndex);
                 const t2 = clampPixelIndex(baseIndex + 1, maxIndex);
                 const t3 = clampPixelIndex(baseIndex + 2, maxIndex);
+
+                //get center tap max of Red/Green brightness to use as a weight later
+                const t1R = getPixelValue(imageData, x, t1, 0); // Red channel
+                const t1G = getPixelValue(imageData, x, t1, 1); // Green channel
+                const t1B = getPixelValue(imageData, x, t1, 2); // Blue channel
+                let luma = Math.max(t1R, Math.max(t1G, t1B));
+                let lumaNormalized = luma / 255.0
                 
                 for (let channel = 0; channel < 3; channel++) { // RGB channels
                     const t0Val = getPixelValue(imageData, x, t0, channel);
@@ -399,13 +410,9 @@ function applyPolyphaseFilter(imageData, filterData, sourceSize, destSize, axis)
                         
                         const lightOutput = (lightCoeffs[0] * t0Val + lightCoeffs[1] * t1Val +
                                            lightCoeffs[2] * t2Val + lightCoeffs[3] * t3Val) / filterData.fullBrightness;
-                        
-                        // Interpolate based on center tap brightness (t1)
-                        let t1Normalized = t1Val / 255.0;
-                        t1Normalized = Math.max(0.0, Math.min(1.0, t1Normalized));
-                        
+
                         // Blend: higher brightness uses more light filter
-                        const output = t1Normalized * lightOutput + (1.0 - t1Normalized) * darkOutput;
+                        const output = lumaNormalized * lightOutput + (1.0 - lumaNormalized) * darkOutput;
                         
                         setPixelValue(destImageData, x, i, channel, output);
                     } else {
