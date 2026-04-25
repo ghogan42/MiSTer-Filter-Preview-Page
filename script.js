@@ -1058,7 +1058,8 @@ async function processImage() {
     const saveButton = document.getElementById('saveButton');
     const applyShadowMask = document.getElementById('applyShadowMask').checked;
     const shadowMask2x = document.getElementById('shadowMask2x').checked;
-    const debugPhasesEnabled = document.getElementById('phaseDebug').checked;
+    //const debugPhasesEnabled = document.getElementById('phaseDebug').checked;
+    const debugPhasesEnabled = false;
     
     // Try to load default image if no file selected
     let imageFile = inputFile;
