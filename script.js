@@ -1,5 +1,4 @@
 // MiSTer Polyphase Filter Image Scaler - JavaScript Version
-// Ported from image_scaler.py with identical math
 
 // --- Structure for pre-decoded mask data ---
 class MaskCell {
@@ -305,6 +304,40 @@ function setPixelValue(imageData, x, y, channel, value) {
     imageData.data[index] = Math.max(0, Math.min(255, Math.round(value)));
 }
 
+function encodePhaseToByte(phaseIndex, numPhases) {
+    if (numPhases <= 1) {
+        return 0;
+    }
+    const maxIndex = numPhases - 1;
+    const normalized = phaseIndex / maxIndex;
+    //return Math.max(0, Math.min(255, Math.round(normalized * 255)));
+    return Math.max(0, Math.min(255, phaseIndex));
+}
+
+function computePhaseIndex(destIndex, sourceSize, destSize, numPhases) {
+    if (numPhases <= 0 || destSize === 0) {
+        return 0;
+    }
+
+    const numerator = (2 * destIndex + 1) * sourceSize;
+    const denominator = 2 * destSize;
+    const fracNumerator = ((numerator % denominator) + denominator) % denominator;
+    const halfPhases = Math.floor(numPhases / 2);
+    const phaseNumerator = fracNumerator * numPhases + halfPhases * denominator;
+    let phase = Math.floor(phaseNumerator / denominator);
+    phase = ((phase % numPhases) + numPhases) % numPhases;
+    return phase;
+}
+
+function computePhaseBytes(filterData, sourceSize, destSize) {
+    const phaseBytes = new Uint8ClampedArray(destSize);
+    for (let i = 0; i < destSize; i++) {
+        const phase = computePhaseIndex(i, sourceSize, destSize, filterData.numPhases);
+        phaseBytes[i] = encodePhaseToByte(phase, filterData.numPhases);
+    }
+    return phaseBytes;
+}
+
 function applyPolyphaseFilter(imageData, filterData, sourceSize, destSize, axis) {
     const sourceWidth = imageData.width;
     const sourceHeight = imageData.height;
@@ -324,25 +357,21 @@ function applyPolyphaseFilter(imageData, filterData, sourceSize, destSize, axis)
         // Calculate source position - exact formula from Python code
         const sourcePos = (i + 0.5) / destSize * sourceSize;
         
-        // Simplified phase computation
-        const fracPart = sourcePos - Math.floor(sourcePos);
-        let phase = Math.floor(fracPart * filterData.numPhases + filterData.numPhases / 2);
-        phase = phase % filterData.numPhases;
+        const phase = computePhaseIndex(i, sourceSize, destSize, filterData.numPhases);
         
         // Get coefficients for this phase
         const darkCoeffs = filterData.darkCoefficients[phase];
         
         if (axis === 0) { // Horizontal scaling
-            for (let y = 0; y < sourceHeight; y++) {
-                const baseIndex = Math.floor(sourcePos - 0.5);
-                const maxIndex = sourceWidth - 1;
-                
-                const t0 = clampPixelIndex(baseIndex - 1, maxIndex);
-                const t1 = clampPixelIndex(baseIndex, maxIndex);
-                const t2 = clampPixelIndex(baseIndex + 1, maxIndex);
-                const t3 = clampPixelIndex(baseIndex + 2, maxIndex);    
+            const baseIndex = Math.floor(sourcePos - 0.5 + 1e-6);
+            const maxIndex = sourceWidth - 1;
+            const t0 = clampPixelIndex(baseIndex - 1, maxIndex);
+            const t1 = clampPixelIndex(baseIndex, maxIndex);
+            const t2 = clampPixelIndex(baseIndex + 1, maxIndex);
+            const t3 = clampPixelIndex(baseIndex + 2, maxIndex);
 
-                //get center tap max of Red/Green brightness to use as a weight later
+            for (let y = 0; y < sourceHeight; y++) {
+                //get center tap t1
                 const t1R = getPixelValue(imageData, t1, y, 0); // Red channel
                 const t1G = getPixelValue(imageData, t1, y, 1); // Green channel
                 const t1B = getPixelValue(imageData, t1, y, 2); // Blue channel
@@ -380,20 +409,26 @@ function applyPolyphaseFilter(imageData, filterData, sourceSize, destSize, axis)
                 setPixelValue(destImageData, i, y, 3, 255);
             }
         } else { // Vertical scaling
-            for (let x = 0; x < sourceWidth; x++) {
-                const baseIndex = Math.floor(sourcePos - 0.5);
-                const maxIndex = sourceHeight - 1;
-                
-                const t0 = clampPixelIndex(baseIndex - 1, maxIndex);
-                const t1 = clampPixelIndex(baseIndex, maxIndex);
-                const t2 = clampPixelIndex(baseIndex + 1, maxIndex);
-                const t3 = clampPixelIndex(baseIndex + 2, maxIndex);
+            const baseIndex = Math.floor(sourcePos - 0.5 + 1e-6);
+            const maxIndex = sourceHeight - 1;
+            const t0 = clampPixelIndex(baseIndex - 1, maxIndex);
+            const t1 = clampPixelIndex(baseIndex, maxIndex);
+            const t2 = clampPixelIndex(baseIndex + 1, maxIndex);
+            const t3 = clampPixelIndex(baseIndex + 2, maxIndex);
 
+            for (let x = 0; x < sourceWidth; x++) {
                 //get center tap max of Red/Green brightness to use as a weight later
                 const t1R = getPixelValue(imageData, x, t1, 0); // Red channel
                 const t1G = getPixelValue(imageData, x, t1, 1); // Green channel
                 const t1B = getPixelValue(imageData, x, t1, 2); // Blue channel
+                //get center tap t2
+                const t2R = getPixelValue(imageData, x, t2, 0); // Red channel
+                const t2G = getPixelValue(imageData, x, t2, 1); // Green channel
+                const t2B = getPixelValue(imageData, x, t2, 2); // Blue channel
                 let luma = Math.max(t1R, Math.max(t1G, t1B));
+                if (phase >= filterData.numPhases/2){
+                    luma = Math.max(t2R, Math.max(t2G, t2B));
+                }
                 let lumaNormalized = luma / 255.0
                 
                 for (let channel = 0; channel < 3; channel++) { // RGB channels
@@ -431,10 +466,29 @@ function applyPolyphaseFilter(imageData, filterData, sourceSize, destSize, axis)
     return destImageData;
 }
 
-function scaleImage(imageData, horzFilter, vertFilter, targetWidth, targetHeight) {
+function scaleImage(imageData, horzFilter, vertFilter, targetWidth, targetHeight, options = {}) {
     const originalWidth = imageData.width;
     const originalHeight = imageData.height;
     let currentImageData = imageData;
+    const debugPhases = options.debugPhases === true;
+
+    if (debugPhases) {
+        const debugImage = new ImageData(targetWidth, targetHeight);
+        const data = debugImage.data;
+        const horzPhaseBytes = computePhaseBytes(horzFilter, originalWidth, targetWidth);
+        const vertPhaseBytes = computePhaseBytes(vertFilter, originalHeight, targetHeight);
+        for (let y = 0; y < targetHeight; y++) {
+            const vertPhase = vertPhaseBytes[y];
+            for (let x = 0; x < targetWidth; x++) {
+                const index = (y * targetWidth + x) * 4;
+                data[index] = horzPhaseBytes[x]; // Red channel: horizontal phase
+                data[index + 1] = vertPhase;     // Green channel: vertical phase
+                data[index + 2] = vertPhase;     // Blue channel mirrors vertical phase
+                data[index + 3] = 255;           // Alpha channel opaque
+            }
+        }
+        return debugImage;
+    }
     
     // Apply horizontal scaling first
     if (originalWidth !== targetWidth) {
@@ -1004,6 +1058,7 @@ async function processImage() {
     const saveButton = document.getElementById('saveButton');
     const applyShadowMask = document.getElementById('applyShadowMask').checked;
     const shadowMask2x = document.getElementById('shadowMask2x').checked;
+    const debugPhasesEnabled = document.getElementById('phaseDebug').checked;
     
     // Try to load default image if no file selected
     let imageFile = inputFile;
@@ -1046,7 +1101,7 @@ async function processImage() {
         
         // Apply gamma correction as the first step (before scaling) if enabled and loaded
         const applyGamma = document.getElementById('applyGamma').checked;
-        if (applyGamma && currentGamma) {
+        if (!debugPhasesEnabled && applyGamma && currentGamma) {
             console.log('Applying gamma correction');
             applyGammaToImage(imageData, currentGamma);
         }
@@ -1089,10 +1144,10 @@ async function processImage() {
         }
         
         // Scale the image to the target dimensions
-        scaledImageData = scaleImage(imageData, currentHorzFilter, currentVertFilter, targetWidth, targetHeight);
+        scaledImageData = scaleImage(imageData, currentHorzFilter, currentVertFilter, targetWidth, targetHeight, { debugPhases: debugPhasesEnabled });
         
         // Apply shadow mask if enabled and loaded
-        if (applyShadowMask && currentShadowMask) {
+        if (!debugPhasesEnabled && applyShadowMask && currentShadowMask) {
             console.log('Applying shadow mask' + (shadowMask2x ? ' (2x)' : ''));
             scaledImageData = applyMaskToImage(scaledImageData, currentShadowMask, shadowMask2x, outputHeight);
         }
