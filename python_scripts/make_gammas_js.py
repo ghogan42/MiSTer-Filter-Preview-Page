@@ -14,7 +14,7 @@ for subdir, _, files in os.walk(root):
                 data[relpath.replace("\\", "/")] = f.read()
 
 # Write to gammas.js
-with open("gammas.js", "w", encoding="utf-8") as out:
+with open("../gammas.js", "w", encoding="utf-8") as out:
     out.write("window.gammas = ")
     json.dump(data, out, ensure_ascii=False, indent=2)
     out.write(";")

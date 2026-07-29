@@ -531,8 +531,8 @@ function parseFilterText(filterText) {
         // Skip empty lines
         if (!line) continue;
             
-        // Check for keywords at the beginning of file
-        if (i < 5) { // Only check first few lines for keywords
+        // Check for keywords before any coefficient lines have been parsed
+        if (coefficients.length === 0) {
             if (line === "10bit") {
                 is10bit = true;
                 console.log("10 Bit = True");

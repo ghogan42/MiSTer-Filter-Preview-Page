@@ -14,7 +14,7 @@ for subdir, _, files in os.walk(root):
                 data[relpath.replace("\\", "/")] = f.read()
 
 # Write to filters.js
-with open("filters.js", "w", encoding="utf-8") as out:
+with open("../filters.js", "w", encoding="utf-8") as out:
     out.write("window.filters = ")
     json.dump(data, out, ensure_ascii=False, indent=2)
     out.write(";")
