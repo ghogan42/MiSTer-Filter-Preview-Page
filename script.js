@@ -265,6 +265,9 @@ class FilterData {
 // Embedded filters from filters.js
 const embeddedFilters = window.filters || {};
 
+// Embedded presets from presets.js
+const embeddedPresets = window.presets || {};
+
 
 // Global variables to store current state
 let currentHorzFilter = null;
@@ -285,8 +288,10 @@ const DEFAULT_GAMMA_NAME = 'Poly_Gamma/Poly 2.7.txt'; // Set to gamma name strin
 let originalFilterNames = [];
 let originalShadowMaskNames = [];
 let originalGammaNames = [];
+let originalPresetNames = [];
 let filteredFilterNames = [];
 let filteredShadowMaskNames = [];
+let filteredPresetNames = [];
 let filteredGammaNames = [];
 
 function clampPixelIndex(index, maxIndex) {
@@ -1349,6 +1354,86 @@ function saveImage() {
     link.click();
 }
 
+// Parse a MiSTer preset .ini file into a plain key/value object.
+// sfilter and ifilter are intentionally left in the object but unused by loadEmbeddedPreset.
+function parsePresetText(presetText) {
+    const lines = presetText.split('\n');
+    const preset = {};
+
+    for (const rawLine of lines) {
+        const line = rawLine.trim();
+
+        // Skip empty lines and comments
+        if (!line || line.startsWith('#')) continue;
+
+        const eqIndex = line.indexOf('=');
+        if (eqIndex === -1) continue; // Skip lines that aren't key=value pairs (e.g. credit lines)
+
+        const key = line.slice(0, eqIndex).trim().toLowerCase();
+        const value = line.slice(eqIndex + 1).trim();
+        preset[key] = value;
+    }
+
+    return preset;
+}
+
+function loadEmbeddedPreset(presetName) {
+    if (presetName === 'custom') {
+        return;
+    }
+
+    const presetText = embeddedPresets[presetName];
+    if (!presetText) {
+        alert(`Embedded preset "${presetName}" not found`);
+        return;
+    }
+
+    try {
+        const preset = parsePresetText(presetText);
+
+        // Horizontal filter
+        if (preset.hfilter && preset.hfilter !== 'same' && embeddedFilters[preset.hfilter]) {
+            document.getElementById('horzFilterDropdown').value = preset.hfilter;
+            loadEmbeddedFilter('horz', preset.hfilter);
+        }
+
+        // Vertical filter ("same" means reuse the horizontal filter)
+        const vfilterName = preset.vfilter === 'same' ? preset.hfilter : preset.vfilter;
+        if (vfilterName && embeddedFilters[vfilterName]) {
+            document.getElementById('vertFilterDropdown').value = vfilterName;
+            loadEmbeddedFilter('vert', vfilterName);
+        }
+
+        // Shadow mask - uncheck "Apply Shadow Mask" if the preset doesn't specify one
+        const applyShadowMaskCheckbox = document.getElementById('applyShadowMask');
+        if (preset.mask && preset.mask !== 'off' && window.shadowmasks && window.shadowmasks[preset.mask]) {
+            document.getElementById('shadowMaskDropdown').value = preset.mask;
+            loadEmbeddedShadowMask(preset.mask);
+            applyShadowMaskCheckbox.checked = true;
+        } else {
+            applyShadowMaskCheckbox.checked = false;
+        }
+
+        // Gamma - uncheck "Apply Gamma Correction" if the preset doesn't specify one
+        const applyGammaCheckbox = document.getElementById('applyGamma');
+        if (preset.gamma && preset.gamma !== 'off' && window.gammas && window.gammas[preset.gamma]) {
+            document.getElementById('gammaDropdown').value = preset.gamma;
+            loadEmbeddedGamma(preset.gamma);
+            applyGammaCheckbox.checked = true;
+        } else {
+            applyGammaCheckbox.checked = false;
+        }
+
+        // Trigger auto-update since checkbox states may have changed programmatically
+        if (document.getElementById('autoUpdate').checked && currentHorzFilter && currentVertFilter && originalImage) {
+            processImage();
+        }
+
+    } catch (error) {
+        alert(`Error loading preset "${presetName}": ${error.message}`);
+    }
+}
+
 function populateFilterDropdowns() {
     const horzDropdown = document.getElementById('horzFilterDropdown');
     const vertDropdown = document.getElementById('vertFilterDropdown');
@@ -1359,17 +1444,20 @@ function populateFilterDropdowns() {
     originalFilterNames = Object.keys(embeddedFilters).sort();
     originalShadowMaskNames = Object.keys(window.shadowmasks || {}).sort();
     originalGammaNames = Object.keys(window.gammas || {}).sort();
-    
+    originalPresetNames = Object.keys(embeddedPresets).sort();
+
     // Initialize filtered lists with original values
     filteredFilterNames = [...originalFilterNames];
     filteredShadowMaskNames = [...originalShadowMaskNames];
     filteredGammaNames = [...originalGammaNames];
-    
+    filteredPresetNames = [...originalPresetNames];
+
     // Populate dropdowns with filtered lists
     updateFilterDropdown('horz');
     updateFilterDropdown('vert');
     updateShadowMaskDropdown();
     updateGammaDropdown();
+    updatePresetDropdown();
     
     // Select and load default filters
     if (originalFilterNames.length > 0) {
@@ -1475,6 +1563,24 @@ function updateGammaDropdown() {
     });
 }
 
+// Update preset dropdown based on current filtered list
+function updatePresetDropdown() {
+    const dropdown = document.getElementById('presetDropdown');
+
+    // Clear existing options except the first one
+    while (dropdown.options.length > 1) {
+        dropdown.remove(1);
+    }
+
+    // Add filtered options
+    filteredPresetNames.forEach(presetName => {
+        const option = document.createElement('option');
+        option.value = presetName;
+        option.textContent = presetName;
+        dropdown.appendChild(option);
+    });
+}
+
 // Filter function for filters
 function filterFilters(searchText) {
     if (!searchText) {
@@ -1509,6 +1615,24 @@ function filterGammas(searchText) {
     return originalGammaNames.filter(name =>
         name.toLowerCase().includes(lowerSearch)
     );
+}
+
+// Filter function for presets
+function filterPresets(searchText) {
+    if (!searchText) {
+        return [...originalPresetNames];
+    }
+
+    const lowerSearch = searchText.toLowerCase();
+    return originalPresetNames.filter(name =>
+        name.toLowerCase().includes(lowerSearch)
+    );
+}
+
+// Handle preset search input
+function handlePresetSearch(searchText) {
+    filteredPresetNames = filterPresets(searchText);
+    updatePresetDropdown();
 }
 
 // Handle filter search input
@@ -1659,5 +1783,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // Add event listener for gamma search input
     document.getElementById('gammaSearch').addEventListener('input', function() {
         handleGammaSearch(this.value);
+    });
+
+    // Add event listener for preset search input
+    document.getElementById('presetSearch').addEventListener('input', function() {
+        handlePresetSearch(this.value);
     });
 });

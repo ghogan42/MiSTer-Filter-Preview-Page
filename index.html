@@ -16,6 +16,19 @@
     
     <div id="controls">
         <div class="filter-group">
+            <h2>Preset</h2>
+            <label for="presetDropdown">Select Preset:</label>
+            <select id="presetDropdown" onchange="loadEmbeddedPreset(this.value)">
+                <option value="custom">Custom/None</option>
+            </select>
+
+            <div class="search-box">
+                <label for="presetSearch">Search Presets:</label>
+                <input type="text" id="presetSearch" placeholder="Type to filter...">
+            </div>
+        </div>
+
+        <div class="filter-group">
             <h2>Horizontal Filter</h2>
             <label for="horzFilterDropdown">Select Embedded Filter:</label>
             <select id="horzFilterDropdown" onchange="loadEmbeddedFilter('horz', this.value)">
@@ -182,6 +195,7 @@
     <script src="filters.js"></script>
     <script src="shadowmasks.js"></script>
     <script src="gammas.js"></script>
+    <script src="presets.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
