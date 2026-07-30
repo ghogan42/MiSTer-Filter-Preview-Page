@@ -1267,6 +1267,7 @@ function addInfoOverlay(ctx, width, height) {
     ctx.shadowOffsetX = 1;
     ctx.shadowOffsetY = 1;
     
+    const presetName = document.getElementById('presetDropdown').value;
     const horzFilterName = document.getElementById('horzFilterName').textContent;
     const vertFilterName = document.getElementById('vertFilterName').textContent;
     const shadowMaskName = document.getElementById('shadowMaskName').textContent;
@@ -1276,15 +1277,19 @@ function addInfoOverlay(ctx, width, height) {
     const aspectRatio = document.getElementById('aspectRatio').value;
     const applyShadowMask = document.getElementById('applyShadowMask').checked;
     const shadowMask2x = document.getElementById('shadowMask2x').checked;
-    
-    const infoText = [
+
+    const infoText = [];
+    if (presetName && presetName !== 'custom') {
+        infoText.push(`Preset: ${presetName}`);
+    }
+    infoText.push(
         `Horizontal Filter: ${horzFilterName}`,
         `Vertical Filter: ${vertFilterName}`,
         `Shadow Mask: ${shadowMaskName}${applyShadowMask ? (shadowMask2x ? ' (2x)' : '') : ' (Off)'}`,
         `Output Resolution: ${outputWidth}x${outputHeight}`,
         `Scaling Mode: ${scalingMode}`,
         `Aspect Ratio: ${aspectRatio}`
-    ];
+    );
     
     infoText.forEach((text, index) => {
         ctx.fillText(text, 10, 10 + index * 20);
